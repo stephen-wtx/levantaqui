@@ -50,10 +50,10 @@ export const INITIAL_ADMIN_BRANCHES: Record<string, BranchAdminState> = {
     lastUpdated: 'Hoje às 10:42',
   },
 
-  Cariaco: {
+  Cariacó: {
     branchId: 'branch-cariaco',
-    branchName: 'Cariaco',
-    referenceLocation: 'Estrada Nacional nº 1, Rotunda do Cariaco',
+    branchName: 'Cariacó',
+    referenceLocation: 'Estrada Nacional nº 1, Rotunda do Cariacó',
     atms: [
       {
         id: 'atm-car-01',
@@ -141,3 +141,6 @@ export const INITIAL_ADMIN_BRANCHES: Record<string, BranchAdminState> = {
     lastUpdated: 'Hoje às 10:42',
   },
 };
+
+// Alias de retrocompatibilidade
+INITIAL_ADMIN_BRANCHES['Cariaco'] = INITIAL_ADMIN_BRANCHES['Cariacó'];

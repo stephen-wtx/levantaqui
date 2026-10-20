@@ -1,12 +1,23 @@
 'use client';
 
 import React from 'react';
-import { useSearchParams } from 'next/navigation';
+import type { SafeUser } from '@/app/lib/auth';
 import { AdminDashboardContent } from './AdminDashboardContent';
 
-export function AdminDashboardWrapper() {
-  const searchParams = useSearchParams();
-  const branchName = searchParams.get('branch') || 'Alto-Gingone';
+interface AdminDashboardWrapperProps {
+  authenticatedUser?: SafeUser;
+}
 
-  return <AdminDashboardContent initialBranchName={branchName} />;
+export function AdminDashboardWrapper({
+  authenticatedUser,
+}: AdminDashboardWrapperProps) {
+  // A filial é SEMPRE determinada pelo utilizador autenticado no backend
+  const branchName = authenticatedUser?.filial.nome || 'Alto-Gingone';
+
+  return (
+    <AdminDashboardContent
+      initialBranchName={branchName}
+      authenticatedUser={authenticatedUser}
+    />
+  );
 }

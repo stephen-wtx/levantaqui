@@ -6,7 +6,7 @@ import { Building2, ChevronDown, Check } from 'lucide-react';
 
 export const ADMIN_BRANCHES = [
   'Alto-Gingone',
-  'Cariaco',
+  'Cariacó',
   'Centro da Cidade',
 ] as const;
 

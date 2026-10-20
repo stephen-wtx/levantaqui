@@ -74,9 +74,9 @@ export const MOCK_BRANCHES: Branch[] = [
   },
   {
     id: 'branch-cariaco',
-    name: 'Cariaco',
-    shortName: 'Cariaco',
-    referenceLocation: 'Estrada Nacional nº 1, Rotunda do Cariaco',
+    name: 'Cariacó',
+    shortName: 'Cariacó',
+    referenceLocation: 'Estrada Nacional nº 1, Rotunda do Cariacó',
     city: 'Pemba',
     status: 'PARTIAL',
     depositService: {

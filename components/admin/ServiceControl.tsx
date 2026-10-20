@@ -8,6 +8,7 @@ import {
   ALL_OPERATING_DAYS,
   ServiceAdminStatus,
 } from '@/types/admin';
+import { validateHorarioRule } from '@/app/lib/validation/api';
 
 interface ServiceControlProps {
   title: string;
@@ -29,6 +30,7 @@ export function ServiceControl({
   const [selectedDays, setSelectedDays] = useState<OperatingDay[]>(config.days);
   const [openingTime, setOpeningTime] = useState<string>(config.openingTime);
   const [closingTime, setClosingTime] = useState<string>(config.closingTime);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const toggleDay = (day: OperatingDay) => {
     let newDays: OperatingDay[];
@@ -40,15 +42,20 @@ export function ServiceControl({
       newDays = [...selectedDays, day];
     }
     setSelectedDays(newDays);
-    onConfigSave({
-      ...config,
-      days: newDays,
-      openingTime,
-      closingTime,
-    });
+    setScheduleError(null);
   };
 
   const handleHoursSave = () => {
+    // Valida cada dia seleccionado de acordo com as regras de negócio
+    for (const day of selectedDays) {
+      const err = validateHorarioRule(day, openingTime, closingTime);
+      if (err) {
+        setScheduleError(err);
+        return;
+      }
+    }
+
+    setScheduleError(null);
     onConfigSave({
       ...config,
       days: selectedDays,
@@ -216,19 +223,27 @@ export function ServiceControl({
       </div>
 
       {/* Botão de Guardar Alterações com Confirmação */}
-      <div className="pt-5 mt-5 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-[11px] text-gray-400">
-          {selectedDays.length} {selectedDays.length === 1 ? 'dia activo' : 'dias activos'} • {openingTime} — {closingTime}
-        </span>
+      <div className="pt-5 mt-5 border-t border-gray-100 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-gray-400">
+            {selectedDays.length} {selectedDays.length === 1 ? 'dia activo' : 'dias activos'} • {openingTime} — {closingTime}
+          </span>
 
-        <button
-          type="button"
-          onClick={handleHoursSave}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-gray-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-gray-800 active:bg-black active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/20 shadow-xs"
-        >
-          <Check className="h-3.5 w-3.5" />
-          <span>Guardar horário</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleHoursSave}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-gray-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-gray-800 active:bg-black active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/20 shadow-xs"
+          >
+            <Check className="h-3.5 w-3.5" />
+            <span>Guardar horário</span>
+          </button>
+        </div>
+
+        {scheduleError && (
+          <p className="text-right text-[11px] font-medium text-rose-600">
+            {scheduleError}
+          </p>
+        )}
       </div>
     </article>
   );

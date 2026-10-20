@@ -15,15 +15,18 @@ import {
   ServiceAdminStatus,
   AdminServiceConfig,
   FeedbackNotification,
+  OperatingDay,
 } from '@/types/admin';
 import { INITIAL_ADMIN_BRANCHES } from '@/data/mock-admin-data';
 import { AdminHeader } from './AdminHeader';
 import { ATMList } from './ATMList';
 import { ServiceControl } from './ServiceControl';
 import { FeedbackMessage } from './FeedbackMessage';
+import type { SafeUser } from '@/app/lib/auth';
 
 interface AdminDashboardContentProps {
   initialBranchName?: string;
+  authenticatedUser?: SafeUser;
 }
 
 const ATM_STATUS_LABELS: Record<ATMAdminStatus, string> = {
@@ -32,12 +35,51 @@ const ATM_STATUS_LABELS: Record<ATMAdminStatus, string> = {
   MAINTENANCE: 'Em manutenção',
 };
 
+const DIA_SEMANA_MAP: Record<
+  OperatingDay,
+  'SEGUNDA' | 'TERCA' | 'QUARTA' | 'QUINTA' | 'SEXTA' | 'SABADO'
+> = {
+  Segunda: 'SEGUNDA',
+  Terça: 'TERCA',
+  Quarta: 'QUARTA',
+  Quinta: 'QUINTA',
+  Sexta: 'SEXTA',
+  Sábado: 'SABADO',
+};
+
+const DIA_SEMANA_REVERSE: Record<string, OperatingDay> = {
+  SEGUNDA: 'Segunda',
+  TERCA: 'Terça',
+  QUARTA: 'Quarta',
+  QUINTA: 'Quinta',
+  SEXTA: 'Sexta',
+  SABADO: 'Sábado',
+};
+
 export function AdminDashboardContent({
   initialBranchName = 'Alto-Gingone',
+  authenticatedUser,
 }: AdminDashboardContentProps) {
-  // Selecciona o balcão inicial válido
-  const validBranchName = INITIAL_ADMIN_BRANCHES[initialBranchName]
-    ? initialBranchName
+  const [currentUser, setCurrentUser] = useState<SafeUser | null>(
+    authenticatedUser || null
+  );
+
+  // Consulta /api/auth/me para sincronizar dados do utilizador e da filial autenticada
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Determina o balcão efectivo com base na autenticação do backend
+  const activeBranchName = currentUser?.filial.nome || initialBranchName;
+  const validBranchName = INITIAL_ADMIN_BRANCHES[activeBranchName]
+    ? activeBranchName
     : 'Alto-Gingone';
 
   const [branchState, setBranchState] = useState<BranchAdminState>(() => {
@@ -49,14 +91,80 @@ export function AdminDashboardContent({
   );
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Se o prop initialBranchName mudar, recarrega o estado inicial daquele balcão
+  // Sincroniza dados reais da base de dados para o balcão autenticado
   useEffect(() => {
-    if (INITIAL_ADMIN_BRANCHES[validBranchName]) {
-      setBranchState(
-        JSON.parse(JSON.stringify(INITIAL_ADMIN_BRANCHES[validBranchName]))
-      );
-    }
-  }, [validBranchName]);
+    const targetBranch = currentUser?.filial.nome || validBranchName;
+    if (!targetBranch) return;
+
+    fetch(`/api/filiais/${encodeURIComponent(targetBranch)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.filial) {
+          const f = data.filial;
+          const depDb = f.servicos?.find((s: any) => s.tipo === 'DEPOSITOS');
+          const custDb = f.servicos?.find((s: any) => s.tipo === 'ATENDIMENTO');
+
+          const now = new Date();
+          const lastUpdatedStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+            now.getMinutes()
+          ).padStart(2, '0')}`;
+
+          setBranchState({
+            branchId: f.id,
+            branchName: f.nome,
+            referenceLocation: f.referenceLocation,
+            atms: f.atms.map((a: any) => ({
+              id: a.id,
+              code: a.code,
+              label: a.label,
+              locationDetails: a.locationDetails || undefined,
+              status:
+                a.estado === 'DISPONIVEL'
+                  ? 'AVAILABLE'
+                  : a.estado === 'INDISPONIVEL'
+                  ? 'UNAVAILABLE'
+                  : 'MAINTENANCE',
+            })),
+            depositService: {
+              id: depDb?.id,
+              status: depDb?.estado === 'ABERTO' ? 'OPEN' : 'CLOSED',
+              days:
+                depDb?.horarios
+                  ?.map((h: any) => DIA_SEMANA_REVERSE[h.diaSemana])
+                  .filter(Boolean) || [
+                  'Segunda',
+                  'Terça',
+                  'Quarta',
+                  'Quinta',
+                  'Sexta',
+                ],
+              openingTime: depDb?.horarios?.[0]?.horaAbertura || '08:00',
+              closingTime: depDb?.horarios?.[0]?.horaFecho || '15:30',
+            },
+            customerService: {
+              id: custDb?.id,
+              status: custDb?.estado === 'ABERTO' ? 'OPEN' : 'CLOSED',
+              days:
+                custDb?.horarios
+                  ?.map((h: any) => DIA_SEMANA_REVERSE[h.diaSemana])
+                  .filter(Boolean) || [
+                  'Segunda',
+                  'Terça',
+                  'Quarta',
+                  'Quinta',
+                  'Sexta',
+                ],
+              openingTime: custDb?.horarios?.[0]?.horaAbertura || '08:00',
+              closingTime: custDb?.horarios?.[0]?.horaFecho || '15:30',
+            },
+            lastUpdated: lastUpdatedStr,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Erro ao sincronizar filial com PostgreSQL:', err);
+      });
+  }, [currentUser, validBranchName]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -70,14 +178,15 @@ export function AdminDashboardContent({
     }, 2800);
   };
 
-  // 1. Alteração de Estado do ATM
-  const handleATMStatusChange = (atmId: string, newStatus: ATMAdminStatus) => {
+  // 1. Alteração de Estado do ATM ligada à BD (PATCH /api/admin/atms/[id])
+  const handleATMStatusChange = async (atmId: string, newStatus: ATMAdminStatus) => {
     const targetAtm = branchState.atms.find((a) => a.id === atmId);
     if (!targetAtm) return;
 
     const previousStatus = targetAtm.status;
     if (previousStatus === newStatus) return;
 
+    // Actualização optimista na UI
     setBranchState((prev) => ({
       ...prev,
       atms: prev.atms.map((atm) =>
@@ -85,14 +194,63 @@ export function AdminDashboardContent({
       ),
     }));
 
-    showNotification(
-      'success',
-      `Estado do ${targetAtm.label} alterado para ${ATM_STATUS_LABELS[newStatus]}`
-    );
+    const prismaEstado =
+      newStatus === 'AVAILABLE'
+        ? 'DISPONIVEL'
+        : newStatus === 'UNAVAILABLE'
+        ? 'INDISPONIVEL'
+        : 'MANUTENCAO';
+
+    try {
+      const res = await fetch(`/api/admin/atms/${atmId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: prismaEstado }),
+      });
+
+      if (!res.ok) {
+        setBranchState((prev) => ({
+          ...prev,
+          atms: prev.atms.map((atm) =>
+            atm.id === atmId ? { ...atm, status: previousStatus } : atm
+          ),
+        }));
+        const err = await res.json().catch(() => ({}));
+        showNotification('error', err.error || 'Não foi possível actualizar o ATM.');
+        return;
+      }
+
+      const now = new Date();
+      const currentTimestampStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+        now.getMinutes()
+      ).padStart(2, '0')}`;
+
+      setBranchState((prev) => ({
+        ...prev,
+        lastUpdated: currentTimestampStr,
+      }));
+
+      showNotification(
+        'success',
+        `Estado do ${targetAtm.label} alterado para ${ATM_STATUS_LABELS[newStatus]}`
+      );
+    } catch {
+      setBranchState((prev) => ({
+        ...prev,
+        atms: prev.atms.map((atm) =>
+          atm.id === atmId ? { ...atm, status: previousStatus } : atm
+        ),
+      }));
+      showNotification('error', 'Erro ao comunicar com o servidor.');
+    }
   };
 
-  // 2. Alteração de Estado de Depósitos
-  const handleDepositStatusChange = (newStatus: ServiceAdminStatus) => {
+  // 2. Alteração de Estado de Depósitos (PATCH /api/admin/servicos/[id])
+  const handleDepositStatusChange = async (newStatus: ServiceAdminStatus) => {
+    const serviceId = branchState.depositService.id;
+    const previousStatus = branchState.depositService.status;
+    if (previousStatus === newStatus) return;
+
     setBranchState((prev) => ({
       ...prev,
       depositService: {
@@ -101,51 +259,255 @@ export function AdminDashboardContent({
       },
     }));
 
-    showNotification(
-      'success',
-      `Serviço de depósitos alterado para ${
-        newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
-      }`
-    );
-  };
+    if (!serviceId) {
+      showNotification(
+        'success',
+        `Serviço de depósitos alterado para ${
+          newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
+        }`
+      );
+      return;
+    }
 
-  // 3. Salvar Configuração de Depósitos
-  const handleDepositConfigSave = (updatedConfig: AdminServiceConfig) => {
-    setBranchState((prev) => ({
-      ...prev,
-      depositService: updatedConfig,
-    }));
+    try {
+      const res = await fetch(`/api/admin/servicos/${serviceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: newStatus === 'OPEN' ? 'ABERTO' : 'FECHADO',
+        }),
+      });
 
-    showNotification('success', 'Horário e dias de depósitos actualizados');
-  };
+      if (!res.ok) {
+        setBranchState((prev) => ({
+          ...prev,
+          depositService: {
+            ...prev.depositService,
+            status: previousStatus,
+          },
+        }));
+        const err = await res.json().catch(() => ({}));
+        showNotification('error', err.error || 'Não foi possível actualizar o serviço.');
+        return;
+      }
 
-  // 4. Alteração de Estado de Atendimento
-  const handleCustomerStatusChange = (newStatus: ServiceAdminStatus) => {
-    setBranchState((prev) => ({
-      ...prev,
-      customerService: {
-        ...prev.customerService,
-        status: newStatus,
-      },
-    }));
+        const now = new Date();
+        const currentTimestampStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+          now.getMinutes()
+        ).padStart(2, '0')}`;
+        setBranchState((prev) => ({
+          ...prev,
+          lastUpdated: currentTimestampStr,
+        }));
 
-    showNotification(
-      'success',
-      `Atendimento presencial alterado para ${
-        newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
-      }`
-    );
-  };
+        showNotification(
+          'success',
+          `Serviço de depósitos alterado para ${
+            newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
+          }`
+        );
+      } catch {
+        setBranchState((prev) => ({
+          ...prev,
+          depositService: {
+            ...prev.depositService,
+            status: previousStatus,
+          },
+        }));
+        showNotification('error', 'Erro ao comunicar com o servidor.');
+      }
+    };
 
-  // 5. Salvar Configuração de Atendimento
-  const handleCustomerConfigSave = (updatedConfig: AdminServiceConfig) => {
-    setBranchState((prev) => ({
-      ...prev,
-      customerService: updatedConfig,
-    }));
+    // 3. Salvar Configuração e Horários de Depósitos (PATCH /api/admin/servicos/[id]/horarios)
+    const handleDepositConfigSave = async (updatedConfig: AdminServiceConfig) => {
+      const serviceId = branchState.depositService.id;
+      const previousConfig = branchState.depositService;
 
-    showNotification('success', 'Horário e dias de atendimento actualizados');
-  };
+      setBranchState((prev) => ({
+        ...prev,
+        depositService: updatedConfig,
+      }));
+
+      if (!serviceId) {
+        showNotification('success', 'Horário e dias de depósitos actualizados');
+        return;
+      }
+
+      const payload = {
+        horarios: updatedConfig.days.map((day) => ({
+          diaSemana: DIA_SEMANA_MAP[day],
+          horaAbertura: updatedConfig.openingTime,
+          horaFecho: updatedConfig.closingTime,
+        })),
+      };
+
+      try {
+        const res = await fetch(`/api/admin/servicos/${serviceId}/horarios`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          setBranchState((prev) => ({
+            ...prev,
+            depositService: previousConfig,
+          }));
+          const err = await res.json().catch(() => ({}));
+          showNotification('error', err.error || 'Não foi possível actualizar horários.');
+          return;
+        }
+
+        const now = new Date();
+        const currentTimestampStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+          now.getMinutes()
+        ).padStart(2, '0')}`;
+        setBranchState((prev) => ({
+          ...prev,
+          lastUpdated: currentTimestampStr,
+        }));
+
+        showNotification('success', 'Horário e dias de depósitos actualizados');
+      } catch {
+        setBranchState((prev) => ({
+          ...prev,
+          depositService: previousConfig,
+        }));
+        showNotification('error', 'Erro ao comunicar com o servidor.');
+      }
+    };
+
+    // 4. Alteração de Estado de Atendimento (PATCH /api/admin/servicos/[id])
+    const handleCustomerStatusChange = async (newStatus: ServiceAdminStatus) => {
+      const serviceId = branchState.customerService.id;
+      const previousStatus = branchState.customerService.status;
+      if (previousStatus === newStatus) return;
+
+      setBranchState((prev) => ({
+        ...prev,
+        customerService: {
+          ...prev.customerService,
+          status: newStatus,
+        },
+      }));
+
+      if (!serviceId) {
+        showNotification(
+          'success',
+          `Atendimento presencial alterado para ${
+            newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
+          }`
+        );
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/admin/servicos/${serviceId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estado: newStatus === 'OPEN' ? 'ABERTO' : 'FECHADO',
+          }),
+        });
+
+        if (!res.ok) {
+          setBranchState((prev) => ({
+            ...prev,
+            customerService: {
+              ...prev.customerService,
+              status: previousStatus,
+            },
+          }));
+          const err = await res.json().catch(() => ({}));
+          showNotification('error', err.error || 'Não foi possível actualizar o serviço.');
+          return;
+        }
+
+        const now = new Date();
+        const currentTimestampStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+          now.getMinutes()
+        ).padStart(2, '0')}`;
+        setBranchState((prev) => ({
+          ...prev,
+          lastUpdated: currentTimestampStr,
+        }));
+
+        showNotification(
+          'success',
+          `Atendimento presencial alterado para ${
+            newStatus === 'OPEN' ? 'Aberto' : 'Fechado'
+          }`
+        );
+      } catch {
+        setBranchState((prev) => ({
+          ...prev,
+          customerService: {
+            ...prev.customerService,
+            status: previousStatus,
+          },
+        }));
+        showNotification('error', 'Erro ao comunicar com o servidor.');
+      }
+    };
+
+    // 5. Salvar Configuração e Horários de Atendimento (PATCH /api/admin/servicos/[id]/horarios)
+    const handleCustomerConfigSave = async (updatedConfig: AdminServiceConfig) => {
+      const serviceId = branchState.customerService.id;
+      const previousConfig = branchState.customerService;
+
+      setBranchState((prev) => ({
+        ...prev,
+        customerService: updatedConfig,
+      }));
+
+      if (!serviceId) {
+        showNotification('success', 'Horário e dias de atendimento actualizados');
+        return;
+      }
+
+      const payload = {
+        horarios: updatedConfig.days.map((day) => ({
+          diaSemana: DIA_SEMANA_MAP[day],
+          horaAbertura: updatedConfig.openingTime,
+          horaFecho: updatedConfig.closingTime,
+        })),
+      };
+
+      try {
+        const res = await fetch(`/api/admin/servicos/${serviceId}/horarios`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          setBranchState((prev) => ({
+            ...prev,
+            customerService: previousConfig,
+          }));
+          const err = await res.json().catch(() => ({}));
+          showNotification('error', err.error || 'Não foi possível actualizar horários.');
+          return;
+        }
+
+        const now = new Date();
+        const currentTimestampStr = `Hoje às ${String(now.getHours()).padStart(2, '0')}:${String(
+          now.getMinutes()
+        ).padStart(2, '0')}`;
+        setBranchState((prev) => ({
+          ...prev,
+          lastUpdated: currentTimestampStr,
+        }));
+
+        showNotification('success', 'Horário e dias de atendimento actualizados');
+      } catch {
+        setBranchState((prev) => ({
+          ...prev,
+          customerService: previousConfig,
+        }));
+        showNotification('error', 'Erro ao comunicar com o servidor.');
+      }
+    };
 
   // Simulação de Erro para demonstração visual das regras
   const handleSimulateError = () => {

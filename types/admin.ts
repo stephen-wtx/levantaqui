@@ -28,6 +28,7 @@ export interface AdminATM {
 }
 
 export interface AdminServiceConfig {
+  id?: string;
   status: ServiceAdminStatus;
   days: OperatingDay[];
   openingTime: string;

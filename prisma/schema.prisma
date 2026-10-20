@@ -1,0 +1,132 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../app/generated/prisma"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EstadoATM {
+  DISPONIVEL
+  INDISPONIVEL
+  MANUTENCAO
+}
+
+enum TipoServico {
+  DEPOSITOS
+  ATENDIMENTO
+}
+
+enum EstadoServico {
+  ABERTO
+  FECHADO
+}
+
+enum DiaSemana {
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+  SABADO
+}
+
+model Filial {
+  id                String        @id @default(cuid())
+  nome              String        @unique
+  codigo            String        @unique
+  referenceLocation String
+  utilizadores      Utilizador[]
+  atms              ATM[]
+  servicos          Servico[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@map("filiais")
+}
+
+model Utilizador {
+  id           String   @id @default(cuid())
+  nome         String
+  username     String   @unique
+  passwordHash String
+  filialId     String
+
+  filial       Filial   @relation(fields: [filialId], references: [id], onDelete: Restrict)
+  sessoes      Sessao[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([filialId])
+  @@map("utilizadores")
+}
+
+model Sessao {
+  id           String     @id @default(cuid())
+  token        String     @unique
+  utilizadorId String
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+
+  utilizador   Utilizador @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+
+  @@index([utilizadorId])
+  @@index([token])
+  @@map("sessoes")
+}
+
+model ATM {
+  id              String    @id @default(cuid())
+  numero          Int
+  code            String    @unique
+  label           String
+  locationDetails String?
+  estado          EstadoATM @default(DISPONIVEL)
+  filialId        String
+
+  filial          Filial    @relation(fields: [filialId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([filialId, numero])
+  @@index([filialId])
+  @@map("atms")
+}
+
+model Servico {
+  id          String         @id @default(cuid())
+  tipo        TipoServico
+  estado      EstadoServico  @default(FECHADO)
+  filialId    String
+
+  filial      Filial         @relation(fields: [filialId], references: [id], onDelete: Cascade)
+  horarios    Horario[]
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([filialId, tipo])
+  @@index([filialId])
+  @@map("servicos")
+}
+
+model Horario {
+  id          String     @id @default(cuid())
+  diaSemana   DiaSemana
+  horaAbertura String
+  horaFecho   String
+  servicoId   String
+
+  servico     Servico    @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([servicoId, diaSemana])
+  @@index([servicoId])
+  @@map("horarios")
+}

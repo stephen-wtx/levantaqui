@@ -69,16 +69,6 @@ export function BranchSidebar({
                   >
                     {branch.name}
                   </span>
-
-                  <span
-                    className={`mt-0.5 block text-xs ${
-                      isAvailable
-                        ? 'font-medium text-emerald-700'
-                        : 'font-medium text-amber-700'
-                    }`}
-                  >
-                    {isAvailable ? 'Disponível' : 'Parcial'}
-                  </span>
                 </div>
               </div>
             </button>

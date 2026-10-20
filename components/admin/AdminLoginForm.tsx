@@ -13,29 +13,60 @@ export function AdminLoginForm() {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [branchError, setBranchError] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
     if (!selectedBranch) {
       setBranchError(true);
       return;
     }
 
+    if (!username.trim() || !password) {
+      setErrorMessage('Por favor, preencha o nome de utilizador e a senha.');
+      return;
+    }
+
     setBranchError(false);
     setIsLoading(true);
 
-    // Simulação visual de transição e navegação para o painel do balcão seleccionado
-    setTimeout(() => {
-      router.push(
-        `/admin/dashboard?branch=${encodeURIComponent(selectedBranch)}`
-      );
-    }, 450);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          password,
+          branch: selectedBranch,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setErrorMessage(data.error || 'Credenciais inválidas. Verifique os dados.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirecciona para o dashboard administrativo da filial autenticada
+      const filialNome = data?.user?.filial?.nome || selectedBranch;
+      router.push(`/admin/dashboard?branch=${encodeURIComponent(filialNome)}`);
+      router.refresh();
+    } catch {
+      setErrorMessage('Erro ao comunicar com o servidor. Tente novamente.');
+      setIsLoading(false);
+    }
   };
 
   const handleBranchSelect = (branch: string) => {
     setSelectedBranch(branch);
     if (branchError) setBranchError(false);
+    if (errorMessage) setErrorMessage(null);
   };
 
   return (
@@ -120,6 +151,16 @@ export function AdminLoginForm() {
           </button>
         </div>
       </div>
+
+      {/* Mensagem de Erro de Autenticação */}
+      {errorMessage && (
+        <div
+          role="alert"
+          className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700"
+        >
+          {errorMessage}
+        </div>
+      )}
 
       {/* 4. Botão ENTRAR */}
       <div className="pt-1">

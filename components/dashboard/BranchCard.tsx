@@ -45,7 +45,7 @@ export function BranchCard({
     >
       <div>
         {/* Header do Balcão */}
-        <div className="flex items-start justify-between gap-3 border-b border-gray-100/90 pb-4.5 sm:pb-5">
+        <div className="flex items-start gap-3 border-b border-gray-100/90 pb-4.5 sm:pb-5">
           <div className="flex min-w-0 items-center gap-3">
             <div
               className={`flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
@@ -70,16 +70,6 @@ export function BranchCard({
               </p>
             </div>
           </div>
-
-          <span
-            className={`inline-flex shrink-0 items-center rounded-full px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-medium border ${
-              branch.status === 'OPEN'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
-                : 'bg-amber-50 text-amber-700 border-amber-200/60'
-            }`}
-          >
-            {branch.status === 'OPEN' ? 'Disponível' : 'Parcial'}
-          </span>
         </div>
 
         {/* Resumo e Lista de ATMs */}
@@ -92,7 +82,13 @@ export function BranchCard({
               <span>{stats.total} ATMs</span>
             </div>
 
-            <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-200/60">
+            <span
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium border ${
+                stats.available === 0
+                  ? 'bg-[#FDF2F7] text-[#D1005D] border-[#D1005D]/30'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+              }`}
+            >
               {stats.available} a pagar
             </span>
           </div>
