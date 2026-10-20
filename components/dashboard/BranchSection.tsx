@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Branch } from '@/types';
+import { MOCK_BRANCHES } from '@/data/mock-data';
 import { BranchCard } from './BranchCard';
 import { BranchSidebar } from './BranchSidebar';
 import { BranchDetailPanel } from './BranchDetailPanel';
@@ -13,12 +14,20 @@ interface BranchSectionProps {
 }
 
 export function BranchSection({ branches }: BranchSectionProps) {
+  const safeBranches = branches && branches.length > 0 ? branches : MOCK_BRANCHES;
+
   const [activeBranchId, setActiveBranchId] = useState<string>(
-    branches[0]?.id || ''
+    safeBranches[0]?.id || ''
   );
 
   const activeBranch =
-    branches.find((b) => b.id === activeBranchId) || branches[0];
+    safeBranches.find((b) => b.id === activeBranchId) || safeBranches[0];
+
+  useEffect(() => {
+    if (safeBranches.length > 0 && !safeBranches.some((b) => b.id === activeBranchId)) {
+      setActiveBranchId(safeBranches[0].id);
+    }
+  }, [safeBranches, activeBranchId]);
 
   return (
     <section
@@ -31,7 +40,7 @@ export function BranchSection({ branches }: BranchSectionProps) {
       <div className="md:hidden">
         {/* Selector Tabs com touch targets optimizados */}
         <div className="mb-5 flex items-center gap-1.5 rounded-2xl bg-gray-200/50 p-1.5 border border-gray-200/60 shadow-xs">
-          {branches.map((b) => {
+          {safeBranches.map((b) => {
             const isActive = b.id === activeBranchId;
 
             return (
@@ -83,7 +92,7 @@ export function BranchSection({ branches }: BranchSectionProps) {
       {/* 2. TABLET (768px - 1279px): Grid Equilibrado       */}
       {/* ================================================== */}
       <div className="hidden md:grid xl:hidden md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-7 items-stretch">
-        {branches.map((branch, index) => (
+        {safeBranches.map((branch, index) => (
           <div
             key={branch.id}
             className={`flex flex-col ${
@@ -108,7 +117,7 @@ export function BranchSection({ branches }: BranchSectionProps) {
         {/* Sidebar Lateral Esquerda */}
         <div className="xl:col-span-4 sticky top-24">
           <BranchSidebar
-            branches={branches}
+            branches={safeBranches}
             activeBranchId={activeBranchId}
             onSelectBranch={setActiveBranchId}
           />

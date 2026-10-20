@@ -1,5 +1,6 @@
 import { NextResponse, connection } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { MOCK_BRANCHES } from '@/data/mock-data';
 import type { Branch, ATM as PublicATM, BranchService } from '@/types';
 
 function formatScheduleDetails(horarios: { diaSemana: string }[]): string {
@@ -94,6 +95,15 @@ export async function GET() {
         },
       },
     });
+
+    // Se a base de dados ainda não tiver filiais carregadas, devolve MOCK_BRANCHES como fallback seguro
+    if (!filiaisDb || filiaisDb.length === 0) {
+      return NextResponse.json({
+        filiais: MOCK_BRANCHES,
+        rawFiliais: [],
+        lastGlobalUpdate: 'hoje às 10:42',
+      });
+    }
 
     let globalMaxTimestamp = 0;
 

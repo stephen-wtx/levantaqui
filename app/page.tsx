@@ -27,7 +27,8 @@ export default function HomePage() {
     fetch('/api/filiais')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.filiais && Array.isArray(data.filiais)) {
+        // Apenas actualiza os balcões se a resposta contiver um array com dados reais
+        if (data?.filiais && Array.isArray(data.filiais) && data.filiais.length > 0) {
           setBranches(data.filiais);
           if (data.lastGlobalUpdate) {
             setLastGlobalUpdate(data.lastGlobalUpdate);
@@ -36,6 +37,7 @@ export default function HomePage() {
       })
       .catch((err) => {
         console.error('Erro ao obter dados de balcões:', err);
+        // Em caso de erro, os dados existentes são estritamente preservados
       });
   }, []);
 

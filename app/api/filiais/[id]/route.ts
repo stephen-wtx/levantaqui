@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, connection } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { MOCK_BRANCHES } from '@/data/mock-data';
 
 export async function GET(
   _req: NextRequest,
@@ -64,6 +65,21 @@ export async function GET(
     });
 
     if (!filial) {
+      const mock = MOCK_BRANCHES.find(
+        (b) =>
+          b.id === id ||
+          b.name.toLowerCase() === id.toLowerCase() ||
+          b.shortName.toLowerCase() === id.toLowerCase()
+      );
+      if (mock) {
+        return NextResponse.json({
+          filial: {
+            ...mock,
+            lastUpdated: mock.lastUpdated || 'hoje às 10:42',
+          },
+        });
+      }
+
       return NextResponse.json(
         { error: 'Filial não encontrada' },
         { status: 404 }
